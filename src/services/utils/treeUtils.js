@@ -1,4 +1,4 @@
-// treeUtils.js - Tree building and manipulation utilities
+// treeUtils.js - Tree building and manipulation utilities with Elo support
 import { Chess } from 'chess.js';
 
 // Build the variation tree from games
@@ -34,7 +34,9 @@ export function buildVariationTree(games, maxDepth = 10, minGames = 2) {
         black: game.black,
         result: game.result,
         date: game.date,
-        url: game.url
+        url: game.url,
+        whiteElo: game.whiteElo,
+        blackElo: game.blackElo
       });
       
       // Process each move up to maxDepth
@@ -70,7 +72,9 @@ export function buildVariationTree(games, maxDepth = 10, minGames = 2) {
           black: game.black,
           result: game.result,
           date: game.date,
-          url: game.url
+          url: game.url,
+          whiteElo: game.whiteElo,
+          blackElo: game.blackElo
         });
       }
     } catch (error) {

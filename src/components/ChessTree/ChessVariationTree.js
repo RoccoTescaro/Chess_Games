@@ -1,4 +1,4 @@
-// ChessVariationTree.js - Main component
+// ChessVariationTree.js - Main component with Undo functionality
 import React, { useState, useEffect } from 'react';
 import { Chess } from 'chess.js';
 import { getGames } from '../../services/db/gameStorage';
@@ -12,12 +12,14 @@ const ChessVariationTree = () => {
   const [games, setGames] = useState([]);
   const [treeData, setTreeData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [buildingInProgress, setBuildingInProgress] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
   const [currentPosition, setCurrentPosition] = useState(new Chess().fen());
   const [relatedGames, setRelatedGames] = useState([]);
   const [path, setPath] = useState([]);
   const [maxDepth, setMaxDepth] = useState(10);
   const [minGames, setMinGames] = useState(2);
+  const [processedGames, setProcessedGames] = useState(0);
 
   // Load games and build tree on component mount
   useEffect(() => {
@@ -63,16 +65,59 @@ const ChessVariationTree = () => {
     setMinGames(newMinGames);
   }
   
-  // Handle rebuild button click
+  // Handle rebuild button click with parallel processing
   function handleRebuild() {
-    const tree = buildVariationTree(games, maxDepth, minGames);
-    setTreeData(tree);
-    if (tree) {
-      setSelectedNode(tree);
-      setCurrentPosition(tree.fen);
-      setRelatedGames(tree.games || []);
-      setPath([{ name: 'Initial Position', node: tree }]);
-    }
+    setBuildingInProgress(true);
+    setProcessedGames(0);
+    
+    // Create a placeholder tree with the root node
+    const initialTree = {
+      fen: new Chess().fen(),
+      move: 'Initial Position',
+      children: {},
+      games: [],
+      frequency: games.length
+    };
+    
+    setTreeData(initialTree);
+    setSelectedNode(initialTree);
+    setCurrentPosition(initialTree.fen);
+    setPath([{ name: 'Initial Position', node: initialTree }]);
+    
+    // Process games in chunks to allow UI updates
+    const chunkSize = 10;
+    let processedTree = { ...initialTree };
+    let processed = 0;
+    
+    const processChunk = (startIdx) => {
+      const endIdx = Math.min(startIdx + chunkSize, games.length);
+      const gamesChunk = games.slice(startIdx, endIdx);
+      
+      // Process this chunk
+      processedTree = incrementalBuildTree(processedTree, gamesChunk, maxDepth);
+      processed += gamesChunk.length;
+      setProcessedGames(processed);
+      
+      // Update the tree data
+      setTreeData({ ...processedTree });
+      
+      // If there are more games to process, schedule next chunk
+      if (endIdx < games.length) {
+        setTimeout(() => processChunk(endIdx), 10);
+      } else {
+        // Finalize tree
+        const prunedTree = pruneTree({ ...processedTree }, minGames);
+        setTreeData(prunedTree);
+        setSelectedNode(prunedTree);
+        setCurrentPosition(prunedTree.fen);
+        setRelatedGames(prunedTree.games || []);
+        setPath([{ name: 'Initial Position', node: prunedTree }]);
+        setBuildingInProgress(false);
+      }
+    };
+    
+    // Start processing
+    processChunk(0);
   }
   
   // Handle move selection
@@ -99,6 +144,18 @@ const ChessVariationTree = () => {
     }
   }
   
+  // Undo the last move
+  function handleUndo() {
+    if (path.length > 1) {
+      const newPath = path.slice(0, -1);
+      const lastNode = newPath[newPath.length - 1].node;
+      setSelectedNode(lastNode);
+      setCurrentPosition(lastNode.fen);
+      setRelatedGames(lastNode.games || []);
+      setPath(newPath);
+    }
+  }
+  
   return (
     <div className="chess-variation-tree">
       <div className="card mb-4">
@@ -119,6 +176,9 @@ const ChessVariationTree = () => {
                 minGames={minGames}
                 onChange={handleControlsChange}
                 onRebuild={handleRebuild}
+                buildingInProgress={buildingInProgress}
+                processedGames={processedGames}
+                totalGames={games.length}
               />
               <div className="row">
                 <div className="col-md-6">
@@ -127,6 +187,7 @@ const ChessVariationTree = () => {
                     path={path}
                     onPathNodeClick={navigateToPathNode}
                     gamesCount={selectedNode ? selectedNode.frequency : 0}
+                    onUndo={handleUndo}
                   />
                   <MovesPanel
                     selectedNode={selectedNode}
@@ -148,5 +209,99 @@ const ChessVariationTree = () => {
     </div>
   );
 };
+
+// Function for incremental tree building - processes a subset of games and integrates into existing tree
+function incrementalBuildTree(existingTree, gamesChunk, maxDepth) {
+  const tree = { ...existingTree };
+  
+  // Process each game to build the tree
+  gamesChunk.forEach(game => {
+    if (!game.pgn) return;
+    
+    try {
+      const chess = new Chess();
+      chess.loadPgn(game.pgn);
+      const moves = chess.history({ verbose: true });
+      
+      // Reset for each game
+      const currentChess = new Chess();
+      let currentNode = tree;
+      
+      // Add the current game to the root's games
+      tree.games.push({
+        id: game.id,
+        white: game.white,
+        black: game.black,
+        result: game.result,
+        date: game.date,
+        url: game.url,
+        whiteElo: game.whiteElo,
+        blackElo: game.blackElo
+      });
+      
+      // Process each move up to maxDepth
+      for (let i = 0; i < moves.length && i < maxDepth; i++) {
+        const move = moves[i];
+        // Create a unique move key
+        const moveKey = `${move.from}${move.to}${move.promotion || ''}`;
+        
+        // Make the move
+        currentChess.move({ from: move.from, to: move.to, promotion: move.promotion });
+        const fen = currentChess.fen();
+        
+        // If this move hasn't been seen yet at this position, create a new node
+        if (!currentNode.children[moveKey]) {
+          currentNode.children[moveKey] = {
+            fen: fen,
+            move: move.san,
+            moveObj: move,
+            children: {},
+            games: [],
+            frequency: 0
+          };
+        }
+        
+        // Move to the next node
+        currentNode = currentNode.children[moveKey];
+        
+        // Increment frequency and add the game to this node
+        currentNode.frequency = (currentNode.frequency || 0) + 1;
+        currentNode.games.push({
+          id: game.id,
+          white: game.white,
+          black: game.black,
+          result: game.result,
+          date: game.date,
+          url: game.url,
+          whiteElo: game.whiteElo,
+          blackElo: game.blackElo
+        });
+      }
+    } catch (error) {
+      console.error('Error processing game PGN:', error, game.id);
+    }
+  });
+  
+  return tree;
+}
+
+// Clone of the pruneTree function for the parallel building process
+function pruneTree(node, minGames) {
+  if (!node) return node;
+  
+  const prunedNode = { ...node };
+  
+  Object.keys(prunedNode.children).forEach(key => {
+    const child = prunedNode.children[key];
+    
+    if (child.frequency < minGames) {
+      delete prunedNode.children[key];
+    } else {
+      prunedNode.children[key] = pruneTree(child, minGames);
+    }
+  });
+  
+  return prunedNode;
+}
 
 export default ChessVariationTree;
