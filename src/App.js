@@ -1,5 +1,8 @@
 // App.js
 import React, { useState, useEffect } from 'react';
+import ChessVariationTree from './ChessVariationTree';
+import { Routes, Route, Link } from 'react-router-dom';
+
 import './bootstrap/bootstrap.min.css';
 import { 
   initDB, 
@@ -315,132 +318,149 @@ function App() {
               'Database initialized (no games stored)'}
           </div>
         )}
+        
+        {/* Add navigation */}
+        <nav className="mt-2">
+          <ul className="nav nav-tabs">
+            <li className="nav-item">
+              <Link className="nav-link" to="/">Game Manager</Link>
+            </li>
+            <li className="nav-item">
+              <Link className="nav-link" to="/tree">Variation Tree</Link>
+            </li>
+          </ul>
+        </nav>
       </header>
       
       <main>
-        <div className="card mb-4">
-          <div className="card-header bg-light">
-            <h5 className="mb-0">Account Settings</h5>
-          </div>
-          <div className="card-body">
-            {/* Chess.com Accounts */}
-            <div className="mb-4">
-              <h6>Chess.com Accounts</h6>
-              {chessAccounts.map((account, index) => (
-                <div key={`chess-${index}`} className="input-group mb-2">
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={account}
-                    onChange={(e) => updateChessAccount(index, e.target.value)}
-                    placeholder="Enter Chess.com username"
-                  />
-                  <button 
-                    className="btn btn-outline-danger"
-                    onClick={() => removeChessAccount(index)}
-                    disabled={chessAccounts.length === 1 && account === ''}
-                  >
-                    Remove
-                  </button>
+        <Routes>
+          <Route path="/" element={
+            <>
+              {/* Original content */}
+              
+              <div className="card mb-4">
+                <div className="card-header bg-light">
+                  <h5 className="mb-0">Account Settings</h5>
                 </div>
-              ))}
-              <button className="btn btn-sm btn-outline-primary" onClick={addChessAccount}>
-                Add Chess.com Account
-              </button>
-            </div>
-            
-            {/* Lichess Accounts */}
-            <div className="mb-4">
-              <h6>Lichess Accounts</h6>
-              {lichessAccounts.map((account, index) => (
-                <div key={`lichess-${index}`} className="input-group mb-2">
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={account}
-                    onChange={(e) => updateLichessAccount(index, e.target.value)}
-                    placeholder="Enter Lichess username"
-                  />
-                  <button 
-                    className="btn btn-outline-danger"
-                    onClick={() => removeLichessAccount(index)}
-                    disabled={lichessAccounts.length === 1 && account === ''}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-              <button className="btn btn-sm btn-outline-primary" onClick={addLichessAccount}>
-                Add Lichess Account
-              </button>
-            </div>
+                <div className="card-body">
+                  {/* Chess.com Accounts */}
+                  <div className="mb-4">
+                    <h6>Chess.com Accounts</h6>
+                    {chessAccounts.map((account, index) => (
+                      <div key={`chess-${index}`} className="input-group mb-2">
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={account}
+                          onChange={(e) => updateChessAccount(index, e.target.value)}
+                          placeholder="Enter Chess.com username"
+                        />
+                        <button 
+                          className="btn btn-outline-danger"
+                          onClick={() => removeChessAccount(index)}
+                          disabled={chessAccounts.length === 1 && account === ''}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <button className="btn btn-sm btn-outline-primary" onClick={addChessAccount}>
+                      Add Chess.com Account
+                    </button>
+                  </div>
+                  
+                  {/* Lichess Accounts */}
+                  <div className="mb-4">
+                    <h6>Lichess Accounts</h6>
+                    {lichessAccounts.map((account, index) => (
+                      <div key={`lichess-${index}`} className="input-group mb-2">
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={account}
+                          onChange={(e) => updateLichessAccount(index, e.target.value)}
+                          placeholder="Enter Lichess username"
+                        />
+                        <button 
+                          className="btn btn-outline-danger"
+                          onClick={() => removeLichessAccount(index)}
+                          disabled={lichessAccounts.length === 1 && account === ''}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <button className="btn btn-sm btn-outline-primary" onClick={addLichessAccount}>
+                      Add Lichess Account
+                    </button>
+                  </div>
 
-            {/* Settings */}
-            <div className="row mb-4">
-              <div className="col-md-6">
-                <div className="form-group">
-                  <label htmlFor="gamesPerAccount" className="form-label">Games per Account:</label>
-                  <input
-                    type="number"
-                    id="gamesPerAccount"
-                    className="form-control"
-                    value={gamesPerAccount}
-                    onChange={(e) => setGamesPerAccount(Number(e.target.value))}
-                    placeholder="Enter number (-1 for all)"
-                    min="-1"
-                  />
-                  <div className="form-text">Use -1 to fetch all available games</div>
+                  {/* Settings */}
+                  <div className="row mb-4">
+                    <div className="col-md-6">
+                      <div className="form-group">
+                        <label htmlFor="gamesPerAccount" className="form-label">Games per Account:</label>
+                        <input
+                          type="number"
+                          id="gamesPerAccount"
+                          className="form-control"
+                          value={gamesPerAccount}
+                          onChange={(e) => setGamesPerAccount(Number(e.target.value))}
+                          placeholder="Enter number (-1 for all)"
+                          min="-1"
+                        />
+                        <div className="form-text">Use -1 to fetch all available games</div>
+                      </div>
+                    </div>
+                    
+                    <div className="col-md-6">
+                      <div className="form-group">
+                        <label htmlFor="analysisDepth" className="form-label">Analyze up to move:</label>
+                        <input
+                          type="number"
+                          id="analysisDepth"
+                          className="form-control"
+                          value={analysisDepth}
+                          onChange={(e) => setAnalysisDepth(Number(e.target.value))}
+                          placeholder="Enter analysis depth"
+                          min="1"
+                          max="40"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Action buttons */}
+                  <div className="d-flex gap-2">
+                    <button 
+                      className="btn btn-primary"
+                      onClick={handleFetchGames} 
+                      disabled={loading}
+                    >
+                      {loading ? 'Loading...' : 'Fetch & Store Games'}
+                    </button>
+                    
+                    {storedGameCount > 0 && (
+                      <button 
+                        className="btn btn-danger"
+                        onClick={handleClearDatabase}
+                        disabled={loading}
+                      >
+                        Clear Database
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               
-              <div className="col-md-6">
-                <div className="form-group">
-                  <label htmlFor="analysisDepth" className="form-label">Analyze up to move:</label>
-                  <input
-                    type="number"
-                    id="analysisDepth"
-                    className="form-control"
-                    value={analysisDepth}
-                    onChange={(e) => setAnalysisDepth(Number(e.target.value))}
-                    placeholder="Enter analysis depth"
-                    min="1"
-                    max="40"
-                  />
+              {/* Error message */}
+              {error && (
+                <div className="alert alert-danger" role="alert">
+                  {error}
                 </div>
-              </div>
-            </div>
-            
-            {/* Action buttons */}
-            <div className="d-flex gap-2">
-              <button 
-                className="btn btn-primary"
-                onClick={handleFetchGames} 
-                disabled={loading}
-              >
-                {loading ? 'Loading...' : 'Fetch & Store Games'}
-              </button>
-              
-              {storedGameCount > 0 && (
-                <button 
-                  className="btn btn-danger"
-                  onClick={handleClearDatabase}
-                  disabled={loading}
-                >
-                  Clear Database
-                </button>
               )}
-            </div>
-          </div>
-        </div>
-        
-        {/* Error message */}
-        {error && (
-          <div className="alert alert-danger" role="alert">
-            {error}
-          </div>
-        )}
-        
-        {/* Loading bar */}
+              
+                {/* Loading bar */}
         {showLoadingBar && (
           <div className="mb-4">
             <div className="progress" style={{ height: "20px" }}>
@@ -513,6 +533,11 @@ function App() {
             </div>
           </div>
         )}
+            </>
+          } />
+          
+          <Route path="/tree" element={<ChessVariationTree />} />
+        </Routes>
       </main>
     </div>
   );

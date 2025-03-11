@@ -6,3 +6,6 @@ We create a training session where we play against the computer and we have to p
 Each time we submit a move the engine should tell us the tops moves.
 
 Other tools that i would like to have are statistical analysis of what instead we play the best, and general statistics of the games (not only the openings).
+
+BUGs
+loading bar mostra 100% ma ha ancora del lavoro in background da svolgere
