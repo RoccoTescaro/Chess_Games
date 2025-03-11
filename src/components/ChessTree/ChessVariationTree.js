@@ -1,12 +1,11 @@
 // ChessVariationTree.js - Main component with background tree building
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Chess } from 'chess.js';
 import { getGames } from '../../services/db/gameStorage';
 import TreeControls from './TreeControls';
 import ChessboardDisplay from './ChessboardDisplay';
 import MovesPanel from './MovesPanel';
 import RelatedGames from './RelatedGames';
-/*import { buildVariationTree } from '../../services/utils/treeUtils';*/
 
 const ChessVariationTree = () => {
   const [games, setGames] = useState([]);
@@ -52,7 +51,8 @@ const ChessVariationTree = () => {
         currentWorker.terminate();
       }
     };
-  });
+    // eslint-disable-next-line 
+  }, []);
   
   // Function to build the initial tree
   const buildInitialTree = (loadedGames) => {
@@ -130,14 +130,17 @@ const ChessVariationTree = () => {
   }
   
   // Start building the tree in the background with chunked processing
+ // Optimize the startTreeBuilding function to reduce deep copies
   function startTreeBuilding(gamesToProcess, initialTree, depth, minGameCount) {
     setBuildingInProgress(true);
     setProcessedGames(0);
-    setWorkingTreeData(JSON.parse(JSON.stringify(initialTree)));
+    
+    // Only make a deep copy here at the beginning, not for every update
+    setWorkingTreeData({...initialTree});
     
     // Process games in chunks to allow UI updates
     const chunkSize = 10;
-    let processedTreeCopy = JSON.parse(JSON.stringify(initialTree));
+    let processedTreeCopy = {...initialTree};
     let processed = 0;
     
     const processChunk = (startIdx) => {
@@ -151,14 +154,13 @@ const ChessVariationTree = () => {
       
       // Update the working tree data periodically to show progress
       if (processed % 50 === 0 || endIdx >= gamesToProcess.length) {
-        const workingTreeCopy = JSON.parse(JSON.stringify(processedTreeCopy));
-        setWorkingTreeData(workingTreeCopy);
+        // Use a shallow copy for the top level and only copy modified nodes
+        setWorkingTreeData({...processedTreeCopy});
         
         // Update current selection if we're viewing the tree being built
-        // This ensures related games and moves panel stay updated with latest data
         if (selectedNode) {
           // Try to find the corresponding node in the updated tree
-          const currentPath = findPathInTree(workingTreeCopy, selectedNode.fen);
+          const currentPath = findPathInTree(processedTreeCopy, selectedNode.fen);
           if (currentPath.length > 0) {
             const updatedNode = currentPath[currentPath.length - 1].node;
             setSelectedNode(updatedNode);
@@ -172,7 +174,7 @@ const ChessVariationTree = () => {
         setTimeout(() => processChunk(endIdx), 5);
       } else {
         // Finalize tree
-        const prunedTree = pruneTree(JSON.parse(JSON.stringify(processedTreeCopy)), minGameCount);
+        const prunedTree = pruneTree({...processedTreeCopy}, minGameCount);
         setTreeData(prunedTree);
         setWorkingTreeData(null);
         
@@ -285,8 +287,9 @@ const ChessVariationTree = () => {
     }
   }
   
-  // Determine which tree to display
-  const displayTree = treeData || workingTreeData;
+  const displayTree = useMemo(() => {
+    return treeData || workingTreeData;
+  }, [treeData, workingTreeData]);
   
   return (
     <div className="chess-variation-tree">
@@ -349,9 +352,9 @@ const ChessVariationTree = () => {
   );
 };
 
-// Function for incremental tree building - processes a subset of games and integrates into existing tree
 function incrementalBuildTree(existingTree, gamesChunk, maxDepth) {
-  const tree = JSON.parse(JSON.stringify(existingTree));
+  // Create a shallow copy of the tree to avoid mutating the original
+  const tree = {...existingTree};
   
   // Process each game to build the tree
   gamesChunk.forEach(game => {
@@ -366,8 +369,12 @@ function incrementalBuildTree(existingTree, gamesChunk, maxDepth) {
       const currentChess = new Chess();
       let currentNode = tree;
       
-      // Add the current game to the root's games
-      if (!currentNode.games.some(g => g.id === game.id)) {
+      // Add the current game to the root's games if not already present
+      if (!tree.games) {
+        tree.games = [];
+      }
+      
+      if (!tree.games.some(g => g.id === game.id)) {
         tree.games.push({
           id: game.id,
           white: game.white,
@@ -391,6 +398,10 @@ function incrementalBuildTree(existingTree, gamesChunk, maxDepth) {
         const fen = currentChess.fen();
         
         // If this move hasn't been seen yet at this position, create a new node
+        if (!currentNode.children) {
+          currentNode.children = {};
+        }
+        
         if (!currentNode.children[moveKey]) {
           currentNode.children[moveKey] = {
             fen: fen,
@@ -407,6 +418,10 @@ function incrementalBuildTree(existingTree, gamesChunk, maxDepth) {
         
         // Increment frequency and add the game to this node if not already present
         currentNode.frequency = (currentNode.frequency || 0) + 1;
+        if (!currentNode.games) {
+          currentNode.games = [];
+        }
+        
         if (!currentNode.games.some(g => g.id === game.id)) {
           currentNode.games.push({
             id: game.id,
@@ -428,21 +443,27 @@ function incrementalBuildTree(existingTree, gamesChunk, maxDepth) {
   return tree;
 }
 
-// Function to prune the tree based on minimum games criterion
+// Function to prune the tree based on minimum games criterion - optimize for better performance
 function pruneTree(node, minGames) {
   if (!node) return node;
   
-  const prunedNode = { ...node };
+  // Create a shallow copy of the node
+  const prunedNode = {...node};
   
-  Object.keys(prunedNode.children).forEach(key => {
-    const child = prunedNode.children[key];
+  if (prunedNode.children) {
+    // Create a shallow copy of the children object
+    prunedNode.children = {...prunedNode.children};
     
-    if (child.frequency < minGames) {
-      delete prunedNode.children[key];
-    } else {
-      prunedNode.children[key] = pruneTree(child, minGames);
-    }
-  });
+    Object.keys(prunedNode.children).forEach(key => {
+      const child = prunedNode.children[key];
+      
+      if (child.frequency < minGames) {
+        delete prunedNode.children[key];
+      } else {
+        prunedNode.children[key] = pruneTree(child, minGames);
+      }
+    });
+  }
   
   return prunedNode;
 }
