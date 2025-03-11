@@ -1,24 +1,38 @@
 // TreeControls.js - Controls for tree parameters with progress indication
 import React from 'react';
+import { useState, useEffect } from 'react';
 
 const TreeControls = ({ 
   maxDepth, 
   minGames, 
-  onChange, 
   onRebuild, 
+  onApply,  // Add this new prop
   buildingInProgress, 
   processedGames, 
   totalGames 
 }) => {
+  const [tempMaxDepth, setTempMaxDepth] = useState(maxDepth);
+  const [tempMinGames, setTempMinGames] = useState(minGames);
+  
   const handleMaxDepthChange = (e) => {
     const value = Math.max(1, parseInt(e.target.value) || 1);
-    onChange(value, minGames);
+    setTempMaxDepth(value);
   };
   
   const handleMinGamesChange = (e) => {
     const value = Math.max(1, parseInt(e.target.value) || 1);
-    onChange(maxDepth, value);
+    setTempMinGames(value);
   };
+  
+  const handleApply = () => {
+    onApply(tempMaxDepth, tempMinGames);
+  };
+  
+  // Reset temp values when props change
+  useEffect(() => {
+    setTempMaxDepth(maxDepth);
+    setTempMinGames(minGames);
+  }, [maxDepth, minGames]);
   
   const progressPercentage = totalGames ? Math.round((processedGames / totalGames) * 100) : 0;
   
@@ -28,12 +42,12 @@ const TreeControls = ({
         <div className={buildingInProgress ? "text-muted" : "d-none"}>
           Building tree: {processedGames} of {totalGames} games ({progressPercentage}%)
         </div>
-        <div className="input-group input-group-sm" style={{ maxWidth: "400px" }}>
+        <div className="input-group input-group-sm" style={{ maxWidth: "500px" }}>
           <span className="input-group-text">Max Depth</span>
           <input 
             type="number" 
             className="form-control" 
-            value={maxDepth} 
+            value={tempMaxDepth} 
             onChange={handleMaxDepthChange}
             min="1"
             max="30"
@@ -44,12 +58,19 @@ const TreeControls = ({
           <input 
             type="number" 
             className="form-control" 
-            value={minGames} 
+            value={tempMinGames} 
             onChange={handleMinGamesChange}
             min="1"
             style={{ width: "70px" }}
             disabled={buildingInProgress}
           />
+          <button 
+            className="btn btn-outline-primary" 
+            onClick={handleApply}
+            disabled={buildingInProgress}
+          >
+            Apply
+          </button>
           <button 
             className="btn btn-outline-secondary" 
             onClick={onRebuild}

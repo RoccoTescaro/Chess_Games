@@ -1,7 +1,7 @@
-// treeUtils.js - Tree building and manipulation utilities with Elo support
+// treeUtils.js - Tree building and manipulation utilities with optimized structure
 import { Chess } from 'chess.js';
 
-// Build the variation tree from games
+// Build the variation tree from games with optimized data structure
 export function buildVariationTree(games, maxDepth = 10, minGames = 2) {
   if (!games || !games.length) return null;
   
@@ -11,14 +11,22 @@ export function buildVariationTree(games, maxDepth = 10, minGames = 2) {
     move: 'Initial Position',
     children: {},
     games: [],
-    frequency: games.length
+    frequency: 0,
+    id: 'root'  // Add an ID to make node identification easier
   };
+  
+  // Create game lookup by ID to avoid duplicates
+  const gameMap = new Map();
   
   // Process each game to build the tree
   games.forEach(game => {
     if (!game.pgn) return;
     
     try {
+      // Skip if we've already processed this game ID
+      if (gameMap.has(game.id)) return;
+      gameMap.set(game.id, true);
+      
       const chess = new Chess();
       chess.loadPgn(game.pgn);
       const moves = chess.history({ verbose: true });
@@ -39,6 +47,9 @@ export function buildVariationTree(games, maxDepth = 10, minGames = 2) {
         blackElo: game.blackElo
       });
       
+      // Increment root frequency
+      root.frequency++;
+      
       // Process each move up to maxDepth
       for (let i = 0; i < moves.length && i < maxDepth; i++) {
         const move = moves[i];
@@ -51,13 +62,21 @@ export function buildVariationTree(games, maxDepth = 10, minGames = 2) {
         
         // If this move hasn't been seen yet at this position, create a new node
         if (!currentNode.children[moveKey]) {
+          const nodeId = `${currentNode.id}_${moveKey}`;
           currentNode.children[moveKey] = {
             fen: fen,
             move: move.san,
-            moveObj: move,
+            moveObj: {
+              from: move.from,
+              to: move.to,
+              promotion: move.promotion,
+              san: move.san,
+              color: move.color
+            },
             children: {},
             games: [],
-            frequency: 0
+            frequency: 0,
+            id: nodeId
           };
         }
         
@@ -65,7 +84,7 @@ export function buildVariationTree(games, maxDepth = 10, minGames = 2) {
         currentNode = currentNode.children[moveKey];
         
         // Increment frequency and add the game to this node
-        currentNode.frequency = (currentNode.frequency || 0) + 1;
+        currentNode.frequency++;
         currentNode.games.push({
           id: game.id,
           white: game.white,
@@ -83,13 +102,13 @@ export function buildVariationTree(games, maxDepth = 10, minGames = 2) {
   });
   
   // Prune the tree to remove variations with too few games
-  pruneTree(root, minGames);
+  pruneTreeNodes(root, minGames);
   
   return root;
 }
 
 // Remove branches that have fewer games than minGames
-function pruneTree(node, minGames) {
+export function pruneTreeNodes(node, minGames) {
   if (!node) return;
   
   Object.keys(node.children).forEach(key => {
@@ -98,7 +117,49 @@ function pruneTree(node, minGames) {
     if (child.frequency < minGames) {
       delete node.children[key];
     } else {
-      pruneTree(child, minGames);
+      pruneTreeNodes(child, minGames);
     }
   });
+}
+
+// Function to serialize tree for storage (can be used with IndexedDB)
+export function serializeTree(tree) {
+  return JSON.stringify(tree);
+}
+
+// Function to deserialize tree from storage
+export function deserializeTree(serializedTree) {
+  return JSON.parse(serializedTree);
+}
+
+// Function to merge two trees (for incremental updates)
+export function mergeTrees(baseTree, newTree) {
+  if (!baseTree) return newTree;
+  if (!newTree) return baseTree;
+  
+  const result = JSON.parse(JSON.stringify(baseTree));
+  
+  // Merge game arrays at root
+  if (newTree.games && newTree.games.length > 0) {
+    const existingGameIds = new Set(result.games.map(g => g.id));
+    newTree.games.forEach(game => {
+      if (!existingGameIds.has(game.id)) {
+        result.games.push(game);
+        result.frequency++;
+      }
+    });
+  }
+  
+  // Recursively merge children
+  Object.keys(newTree.children).forEach(key => {
+    if (!result.children[key]) {
+      // New branch - copy it entirely
+      result.children[key] = JSON.parse(JSON.stringify(newTree.children[key]));
+    } else {
+      // Merge existing branch
+      result.children[key] = mergeTrees(result.children[key], newTree.children[key]);
+    }
+  });
+  
+  return result;
 }
