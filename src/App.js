@@ -1,6 +1,6 @@
 // App.js
 import React, { useState, useEffect } from 'react';
-import './App.css';
+import './bootstrap/bootstrap.min.css';
 import { 
   initDB, 
   saveGames, 
@@ -21,14 +21,21 @@ function App() {
   const [storedGameCount, setStoredGameCount] = useState(0);
   const [analysisDepth, setAnalysisDepth] = useState(20); // Up to which move to analyze
   const [isDbInitialized, setIsDbInitialized] = useState(false);
+  const [showLoadingBar, setShowLoadingBar] = useState(false);
 
   // Initialize database on component mount
   useEffect(() => {
     async function setupDB() {
-      await initDB();
-      const storedGames = await getGames();
-      setStoredGameCount(storedGames.length);
-      setIsDbInitialized(true);
+      try {
+        await initDB();
+        const storedGames = await getGames();
+        setStoredGameCount(storedGames.length);
+        setIsDbInitialized(true);
+        console.log("Database initialized successfully");
+      } catch (error) {
+        console.error("Error initializing database:", error);
+        setError("Failed to initialize database. Please refresh the page.");
+      }
     }
     setupDB();
   }, []);
@@ -131,7 +138,7 @@ function App() {
 
   function formatChessComTimeControl(timeControl) {
     const [initial, increment] = timeControl.split('+').map(Number);
-    return increment?`${Math.floor(initial / 60)}+${increment}`:`${Math.floor(initial / 60)}`;
+    return increment ? `${Math.floor(initial / 60)}+${increment}` : `${Math.floor(initial / 60)}`;
   }
 
   async function fetchLichessGames(username) {
@@ -195,6 +202,7 @@ function App() {
     setError('');
     setLoading(true);
     setProgress(0);
+    setShowLoadingBar(true);
     setGames([]);
     
     try {
@@ -204,6 +212,10 @@ function App() {
       // Filter out empty usernames
       const validChessAccounts = chessAccounts.filter(username => username.trim() !== '');
       const validLichessAccounts = lichessAccounts.filter(username => username.trim() !== '');
+      
+      if (validChessAccounts.length === 0 && validLichessAccounts.length === 0) {
+        throw new Error("Please enter at least one Chess.com or Lichess username");
+      }
       
       // Fetch Chess.com games
       for (const username of validChessAccounts) {
@@ -229,13 +241,23 @@ function App() {
       allGames.sort((a, b) => new Date(b.date) - new Date(a.date));
       
       // Store in IndexedDB with progress updates
-      await saveGames(allGames, (progressPct) => {
-        setProgress(progressPct);
-      });
-      
-      // Update counts
-      setGames(allGames);
-      setStoredGameCount(prev => prev + allGames.length);
+      if (allGames.length > 0) {
+        setProgress(50); // Set to 50% before saving to database
+        console.log(`Saving ${allGames.length} games to database...`);
+        
+        await saveGames(allGames, (progressPct) => {
+          // Map the database saving progress from 50% to 100%
+          setProgress(50 + (progressPct / 2));
+        });
+        
+        console.log("Games saved successfully");
+        
+        // Update counts
+        setGames(allGames);
+        setStoredGameCount(prev => prev + allGames.length);
+      } else {
+        throw new Error("No games found for the provided accounts");
+      }
       
       // If there were errors but we still got some games, show partial error
       if (errors.length > 0) {
@@ -246,6 +268,10 @@ function App() {
     } finally {
       setLoading(false);
       setProgress(100);
+      // Keep the loading bar visible for a short time to show completion
+      setTimeout(() => {
+        setShowLoadingBar(false);
+      }, 1500);
     }
   }
 
@@ -265,12 +291,25 @@ function App() {
     URL.revokeObjectURL(url);
   }
 
+  async function handleClearDatabase() {
+    if (window.confirm("Are you sure you want to clear the database? This will delete all stored games.")) {
+      try {
+        await clearGames();
+        setStoredGameCount(0);
+        setGames([]);
+        alert("Database cleared successfully");
+      } catch (error) {
+        setError(`Failed to clear database: ${error.message}`);
+      }
+    }
+  }
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <h1>Chess Game Analyzer</h1>
+    <div className="container py-4">
+      <header className="pb-3 mb-4 border-bottom">
+        <h1 className="fw-bold">Chess Game Analyzer</h1>
         {isDbInitialized && (
-          <div className="db-status">
+          <div className="text-muted small">
             {storedGameCount > 0 ? 
               `Database contains ${storedGameCount} games` : 
               'Database initialized (no games stored)'}
@@ -278,157 +317,200 @@ function App() {
         )}
       </header>
       
-      <main className="App-main">
-        <div className="input-container">
-          <div className="platform-section">
-            <h2>Chess.com Accounts</h2>
-            {chessAccounts.map((account, index) => (
-              <div key={`chess-${index}`} className="account-input">
-                <input
-                  type="text"
-                  value={account}
-                  onChange={(e) => updateChessAccount(index, e.target.value)}
-                  placeholder="Enter Chess.com username"
-                />
-                <button 
-                  className="remove-btn"
-                  onClick={() => removeChessAccount(index)}
-                  disabled={chessAccounts.length === 1 && account === ''}
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-            <button className="add-btn" onClick={addChessAccount}>
-              Add Chess.com Account
-            </button>
+      <main>
+        <div className="card mb-4">
+          <div className="card-header bg-light">
+            <h5 className="mb-0">Account Settings</h5>
           </div>
-          
-          <div className="platform-section">
-            <h2>Lichess Accounts</h2>
-            {lichessAccounts.map((account, index) => (
-              <div key={`lichess-${index}`} className="account-input">
-                <input
-                  type="text"
-                  value={account}
-                  onChange={(e) => updateLichessAccount(index, e.target.value)}
-                  placeholder="Enter Lichess username"
-                />
-                <button 
-                  className="remove-btn"
-                  onClick={() => removeLichessAccount(index)}
-                  disabled={lichessAccounts.length === 1 && account === ''}
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-            <button className="add-btn" onClick={addLichessAccount}>
-              Add Lichess Account
-            </button>
-          </div>
+          <div className="card-body">
+            {/* Chess.com Accounts */}
+            <div className="mb-4">
+              <h6>Chess.com Accounts</h6>
+              {chessAccounts.map((account, index) => (
+                <div key={`chess-${index}`} className="input-group mb-2">
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={account}
+                    onChange={(e) => updateChessAccount(index, e.target.value)}
+                    placeholder="Enter Chess.com username"
+                  />
+                  <button 
+                    className="btn btn-outline-danger"
+                    onClick={() => removeChessAccount(index)}
+                    disabled={chessAccounts.length === 1 && account === ''}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button className="btn btn-sm btn-outline-primary" onClick={addChessAccount}>
+                Add Chess.com Account
+              </button>
+            </div>
+            
+            {/* Lichess Accounts */}
+            <div className="mb-4">
+              <h6>Lichess Accounts</h6>
+              {lichessAccounts.map((account, index) => (
+                <div key={`lichess-${index}`} className="input-group mb-2">
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={account}
+                    onChange={(e) => updateLichessAccount(index, e.target.value)}
+                    placeholder="Enter Lichess username"
+                  />
+                  <button 
+                    className="btn btn-outline-danger"
+                    onClick={() => removeLichessAccount(index)}
+                    disabled={lichessAccounts.length === 1 && account === ''}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button className="btn btn-sm btn-outline-primary" onClick={addLichessAccount}>
+                Add Lichess Account
+              </button>
+            </div>
 
-          <div className="settings-row">
-            <div className="games-per-account">
-              <label htmlFor="gamesPerAccount">Games per Account:</label>
-              <input
-                type="number"
-                id="gamesPerAccount"
-                value={gamesPerAccount}
-                onChange={(e) => setGamesPerAccount(Number(e.target.value))}
-                placeholder="Enter number of games per account (-1 for all)"
-                min="-1"
-                className="form-control"
-              />
+            {/* Settings */}
+            <div className="row mb-4">
+              <div className="col-md-6">
+                <div className="form-group">
+                  <label htmlFor="gamesPerAccount" className="form-label">Games per Account:</label>
+                  <input
+                    type="number"
+                    id="gamesPerAccount"
+                    className="form-control"
+                    value={gamesPerAccount}
+                    onChange={(e) => setGamesPerAccount(Number(e.target.value))}
+                    placeholder="Enter number (-1 for all)"
+                    min="-1"
+                  />
+                  <div className="form-text">Use -1 to fetch all available games</div>
+                </div>
+              </div>
+              
+              <div className="col-md-6">
+                <div className="form-group">
+                  <label htmlFor="analysisDepth" className="form-label">Analyze up to move:</label>
+                  <input
+                    type="number"
+                    id="analysisDepth"
+                    className="form-control"
+                    value={analysisDepth}
+                    onChange={(e) => setAnalysisDepth(Number(e.target.value))}
+                    placeholder="Enter analysis depth"
+                    min="1"
+                    max="40"
+                  />
+                </div>
+              </div>
             </div>
             
-            <div className="analysis-depth">
-              <label htmlFor="analysisDepth">Analyze up to move:</label>
-              <input
-                type="number"
-                id="analysisDepth"
-                value={analysisDepth}
-                onChange={(e) => setAnalysisDepth(Number(e.target.value))}
-                placeholder="Enter analysis depth"
-                min="1"
-                max="40"
-                className="form-control"
-              />
+            {/* Action buttons */}
+            <div className="d-flex gap-2">
+              <button 
+                className="btn btn-primary"
+                onClick={handleFetchGames} 
+                disabled={loading}
+              >
+                {loading ? 'Loading...' : 'Fetch & Store Games'}
+              </button>
+              
+              {storedGameCount > 0 && (
+                <button 
+                  className="btn btn-danger"
+                  onClick={handleClearDatabase}
+                  disabled={loading}
+                >
+                  Clear Database
+                </button>
+              )}
             </div>
-          </div>
-          
-          <div className="button-row">
-            <button 
-              className="fetch-btn"
-              onClick={handleFetchGames} 
-              disabled={loading || (chessAccounts.every(a => a.trim() === '') && lichessAccounts.every(a => a.trim() === ''))}
-            >
-              {loading ? 'Loading...' : 'Fetch & Store Games'}
-            </button>
-            
-            {/* We'll add more buttons here for analysis later */}
           </div>
         </div>
         
-        {error && <div className="error-message">{error}</div>}
-        
-        {loading && (
-          <div className="progress-container">
-            <div className="progress-bar">
-              <div className="progress-fill" style={{ width: `${progress}%` }}></div>
-            </div>
-            <div className="progress-text">{Math.round(progress)}% complete</div>
+        {/* Error message */}
+        {error && (
+          <div className="alert alert-danger" role="alert">
+            {error}
           </div>
         )}
         
-        {games.length > 0 && (
-          <div className="results-container">
-            <div className="results-header">
-              <h2>Found {games.length} games</h2>
-              <div className="action-buttons">
-                <button onClick={downloadPGN}>Download as PGN</button>
-                {/* Future analysis buttons will go here */}
+        {/* Loading bar */}
+        {showLoadingBar && (
+          <div className="mb-4">
+            <div className="progress" style={{ height: "20px" }}>
+              <div 
+                className="progress-bar progress-bar-striped progress-bar-animated" 
+                role="progressbar" 
+                style={{ width: `${progress}%` }} 
+                aria-valuenow={progress} 
+                aria-valuemin="0" 
+                aria-valuemax="100"
+              >
+                {Math.round(progress)}%
               </div>
             </div>
-            
-            <table className="games-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Account</th>
-                  <th>White (Elo)</th>
-                  <th>Black (Elo)</th>
-                  <th>Result</th>
-                  <th>Time Control</th>
-                  <th>Opening</th>
-                  <th>Source</th>
-                  <th>Link</th>
-                </tr>
-              </thead>
-              <tbody>
-                {games.slice(0, 100).map(game => (
-                  <tr key={game.id}>
-                    <td>{game.date}</td>
-                    <td>{game.account}</td>
-                    <td>{game.white} ({game.whiteElo || 'N/A'})</td>
-                    <td>{game.black} ({game.blackElo || 'N/A'})</td>
-                    <td>{game.result}</td>
-                    <td>{game.timeControl}</td>
-                    <td>{game.openingName || 'Unknown'}</td>
-                    <td>{game.source}</td>
-                    <td>
-                      <a href={game.url} target="_blank" rel="noopener noreferrer">
-                        View
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            
-            {games.length > 100 && (
-              <div className="table-note">Showing first 100 games. All {games.length} games are stored in the database.</div>
-            )}
+            <div className="small text-muted mt-1">
+              {loading ? "Fetching and processing games..." : "Operation complete"}
+            </div>
+          </div>
+        )}
+        
+        {/* Results */}
+        {games.length > 0 && (
+          <div className="card">
+            <div className="card-header bg-light d-flex justify-content-between align-items-center">
+              <h5 className="mb-0">Found {games.length} games</h5>
+              <button className="btn btn-sm btn-success" onClick={downloadPGN}>
+                Download as PGN
+              </button>
+            </div>
+            <div className="card-body p-0">
+              <div className="table-responsive">
+                <table className="table table-striped table-hover mb-0">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Account</th>
+                      <th>White</th>
+                      <th>Black</th>
+                      <th>Result</th>
+                      <th>Time</th>
+                      <th>Opening</th>
+                      <th>Link</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {games.slice(0, 100).map(game => (
+                      <tr key={game.id}>
+                        <td>{game.date}</td>
+                        <td>{game.account}</td>
+                        <td>{game.white} ({game.whiteElo || 'N/A'})</td>
+                        <td>{game.black} ({game.blackElo || 'N/A'})</td>
+                        <td>{game.result}</td>
+                        <td>{game.timeControl}</td>
+                        <td>{game.openingName || 'Unknown'}</td>
+                        <td>
+                          <a href={game.url} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline-primary">
+                            View
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {games.length > 100 && (
+                <div className="card-footer text-muted">
+                  Showing first 100 games. All {games.length} games are stored in the database.
+                </div>
+              )}
+            </div>
           </div>
         )}
       </main>
