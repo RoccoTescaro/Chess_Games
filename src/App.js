@@ -13,7 +13,8 @@ import ChessVariationTree from './components/ChessTree/ChessVariationTree';
 import { fetchChessComGames } from './services/api/chessComApi';
 import { fetchLichessGames } from './services/api/lichessApi';
 import { extractGameInfo } from './services/utils/pgn';
-import { initDB, saveGames, getGames, clearGames } from './services/db/dbService';
+import { initDB } from './services/db/dbService';
+import { saveGames, getGames, clearGames } from './services/db/gameStorage'
 
 function App() {
   const [chessAccounts, setChessAccounts] = useState(['']);
