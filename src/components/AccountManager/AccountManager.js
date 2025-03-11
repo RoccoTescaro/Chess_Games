@@ -22,7 +22,7 @@ const AccountManager = ({
 }) => {
   return (
     <div className="card mb-4">
-      <div className="card-header bg-light">
+      <div className="card-header">
         <h5 className="mb-0">Account Settings</h5>
       </div>
       <div className="card-body">

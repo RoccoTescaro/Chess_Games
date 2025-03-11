@@ -6,7 +6,8 @@ import './styles/bootstrap/bootstrap.min.css';
 // Components
 import AccountManager from './components/AccountManager/AccountManager';
 import GameList from './components/GameList/GameList';
-import ProgressBar from './components/ProgressBar/ProgressBar';
+import ProgressBar from './components/GeneralUI/ProgressBar';
+import ThemeSwitcher from './components/GeneralUI/ThemeSwitcher';
 import ChessVariationTree from './components/ChessTree/ChessVariationTree';
 
 // Services
@@ -179,7 +180,7 @@ function App() {
     <div className="container py-4">
       
       <header className="pb-3 mb-4 border-bottom">
-        <h1 className="fw-bold">Chess Game Analyzer</h1>
+        <div className="d-flex justify-content-between"> <h1 className="fw-bold">Chess Game Analyzer </h1> <ThemeSwitcher /> </div>
         {isDbInitialized && (
           <div className="text-muted small">
             {storedGameCount > 0 ? 
@@ -187,7 +188,7 @@ function App() {
               'Database initialized (no games stored)'}
           </div>
         )}
-        
+
         {/* Add navigation */}
         <nav className="mt-2">
           <ul className="nav nav-tabs">

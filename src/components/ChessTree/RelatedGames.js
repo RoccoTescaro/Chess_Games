@@ -83,7 +83,7 @@ const RelatedGames = ({ games, buildingInProgress, processedGames, totalGames })
   if (!games || games.length === 0) {
     return (
       <div className="card">
-        <div className="card-header bg-light">
+        <div className="card-header">
           <h6 className="mb-0">Games with this Position</h6>
         </div>
         <div className="card-body">
@@ -100,7 +100,7 @@ const RelatedGames = ({ games, buildingInProgress, processedGames, totalGames })
   
   return (
     <div className="card">
-      <div className="card-header bg-light">
+      <div className="card-header">
         <h6 className="mb-0">Games with this Position</h6>
       </div>
       <div className="card-body p-0">
