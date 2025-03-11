@@ -1,7 +1,7 @@
 // RelatedGames.js - Display of games for current position with Elo ratings
 import React, { useState, useEffect } from 'react';
 
-const RelatedGames = ({ games }) => {
+const RelatedGames = ({ games, buildingInProgress, processedGames, totalGames }) => {
   const [sortedGames, setSortedGames] = useState([]);
   const [sortBy, setSortBy] = useState('date');
   const [sortDirection, setSortDirection] = useState('desc');
@@ -62,6 +62,24 @@ const RelatedGames = ({ games }) => {
     }
   };
   
+  const renderProgressInfo = () => {
+    if (!buildingInProgress) return null;
+    
+    const percentComplete = Math.round((processedGames / totalGames) * 100);
+    
+    return (
+      <div className="alert alert-info d-flex align-items-center mb-2">
+        <div className="spinner-border spinner-border-sm me-2" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+        <span>
+          Building tree: {processedGames} of {totalGames} games processed ({percentComplete}%).
+          Showing games from processed positions.
+        </span>
+      </div>
+    );
+  };
+  
   if (!games || games.length === 0) {
     return (
       <div className="card">
@@ -69,7 +87,12 @@ const RelatedGames = ({ games }) => {
           <h6 className="mb-0">Games with this Position</h6>
         </div>
         <div className="card-body">
-          <div className="alert alert-info">No games found for this position.</div>
+          {renderProgressInfo()}
+          <div className="alert alert-info">
+            {buildingInProgress 
+              ? "No games found for this position yet. Games will appear as they're processed."
+              : "No games found for this position."}
+          </div>
         </div>
       </div>
     );
@@ -81,6 +104,7 @@ const RelatedGames = ({ games }) => {
         <h6 className="mb-0">Games with this Position</h6>
       </div>
       <div className="card-body p-0">
+        {renderProgressInfo()}
         <div className="table-responsive">
           <table className="table table-striped table-hover table-sm">
             <thead>
@@ -138,6 +162,7 @@ const RelatedGames = ({ games }) => {
           {sortedGames.length > 10 && (
             <div className="text-muted small p-2">
               Showing 10 of {sortedGames.length} games for this position.
+              {buildingInProgress && " More games may be found as processing continues."}
             </div>
           )}
         </div>

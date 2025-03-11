@@ -6,7 +6,7 @@ import TreeControls from './TreeControls';
 import ChessboardDisplay from './ChessboardDisplay';
 import MovesPanel from './MovesPanel';
 import RelatedGames from './RelatedGames';
-import { buildVariationTree } from '../../services/utils/treeUtils';
+/*import { buildVariationTree } from '../../services/utils/treeUtils';*/
 
 const ChessVariationTree = () => {
   const [games, setGames] = useState([]);
@@ -46,12 +46,13 @@ const ChessVariationTree = () => {
     loadGames();
     
     // Clean up worker on unmount
+    const currentWorker = workerRef.current;
     return () => {
-      if (workerRef.current) {
-        workerRef.current.terminate();
+      if (currentWorker) {
+        currentWorker.terminate();
       }
     };
-  }, []);
+  });
   
   // Function to build the initial tree
   const buildInitialTree = (loadedGames) => {
@@ -73,13 +74,13 @@ const ChessVariationTree = () => {
     startTreeBuilding(loadedGames, initialTree, maxDepth, minGames);
   };
   
-  // Handle node selection in the tree
+  /*// Handle node selection in the tree
   function handleNodeSelect(node, nodePath) {
     setSelectedNode(node);
     setCurrentPosition(node.fen);
     setRelatedGames(node.games || []);
     setPath(nodePath);
-  }
+  }*/
   
   // Handle tree control parameter changes
   function handleControlsChange(newMaxDepth, newMinGames) {
@@ -150,7 +151,20 @@ const ChessVariationTree = () => {
       
       // Update the working tree data periodically to show progress
       if (processed % 50 === 0 || endIdx >= gamesToProcess.length) {
-        setWorkingTreeData(JSON.parse(JSON.stringify(processedTreeCopy)));
+        const workingTreeCopy = JSON.parse(JSON.stringify(processedTreeCopy));
+        setWorkingTreeData(workingTreeCopy);
+        
+        // Update current selection if we're viewing the tree being built
+        // This ensures related games and moves panel stay updated with latest data
+        if (selectedNode) {
+          // Try to find the corresponding node in the updated tree
+          const currentPath = findPathInTree(workingTreeCopy, selectedNode.fen);
+          if (currentPath.length > 0) {
+            const updatedNode = currentPath[currentPath.length - 1].node;
+            setSelectedNode(updatedNode);
+            setRelatedGames(updatedNode.games || []);
+          }
+        }
       }
       
       // If there are more games to process, schedule next chunk
@@ -162,11 +176,29 @@ const ChessVariationTree = () => {
         setTreeData(prunedTree);
         setWorkingTreeData(null);
         
-        // Select the root node
-        setSelectedNode(prunedTree);
-        setCurrentPosition(prunedTree.fen);
-        setRelatedGames(prunedTree.games || []);
-        setPath([{ name: 'Initial Position', node: prunedTree }]);
+        // Find and select the equivalent node in the pruned tree
+        if (selectedNode) {
+          const finalPath = findPathInTree(prunedTree, selectedNode.fen);
+          if (finalPath.length > 0) {
+            const finalNode = finalPath[finalPath.length - 1].node;
+            setSelectedNode(finalNode);
+            setCurrentPosition(finalNode.fen);
+            setRelatedGames(finalNode.games || []);
+            setPath(finalPath);
+          } else {
+            // Fallback to root if node was pruned
+            setSelectedNode(prunedTree);
+            setCurrentPosition(prunedTree.fen);
+            setRelatedGames(prunedTree.games || []);
+            setPath([{ name: 'Initial Position', node: prunedTree }]);
+          }
+        } else {
+          // Select the root node if nothing is selected
+          setSelectedNode(prunedTree);
+          setCurrentPosition(prunedTree.fen);
+          setRelatedGames(prunedTree.games || []);
+          setPath([{ name: 'Initial Position', node: prunedTree }]);
+        }
         
         setBuildingInProgress(false);
       }
@@ -174,6 +206,29 @@ const ChessVariationTree = () => {
     
     // Start processing
     processChunk(0);
+  }
+  
+  // Find a node's path in the tree by FEN position
+  function findPathInTree(tree, targetFen, currentPath = []) {
+    if (!tree) return [];
+    
+    // Start with current node
+    const path = [...currentPath, { name: tree.move, node: tree }];
+    
+    // Check if this is the node we're looking for
+    if (tree.fen === targetFen) {
+      return path;
+    }
+    
+    // Check all children
+    for (const key in tree.children) {
+      const childPath = findPathInTree(tree.children[key], targetFen, path);
+      if (childPath.length > 0) {
+        return childPath;
+      }
+    }
+    
+    return [];
   }
   
   // Handle rebuild button click
@@ -195,6 +250,7 @@ const ChessVariationTree = () => {
   
   // Handle move selection
   function handleMoveSelect(moveKey) {
+    //const currentTree = treeData || workingTreeData;
     if (selectedNode && selectedNode.children[moveKey]) {
       const newNode = selectedNode.children[moveKey];
       const newPath = [...path, { name: newNode.move, node: newNode }];
@@ -269,10 +325,16 @@ const ChessVariationTree = () => {
                   <MovesPanel
                     selectedNode={selectedNode}
                     onMoveSelect={handleMoveSelect}
+                    buildingInProgress={buildingInProgress}
                   />
                 </div>
                 <div className="col-md-6">
-                  <RelatedGames games={relatedGames} />
+                  <RelatedGames 
+                    games={relatedGames} 
+                    buildingInProgress={buildingInProgress}
+                    processedGames={processedGames}
+                    totalGames={games.length}
+                  />
                 </div>
               </div>
             </>
