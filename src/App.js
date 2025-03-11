@@ -1,6 +1,6 @@
 // src/App.js
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, Link } from 'react-router-dom';
+import { Routes, Route, NavLink } from 'react-router-dom';
 import './styles/bootstrap/bootstrap.min.css';
 
 // Components
@@ -35,16 +35,17 @@ function App() {
       try {
         await initDB();
         const storedGames = await getGames();
-        setStoredGameCount(storedGames.length);
+        if (storedGames.length !== storedGameCount) {
+          setStoredGameCount(storedGames.length);
+        }
         setIsDbInitialized(true);
-        console.log("Database initialized successfully");
       } catch (error) {
-        console.error("Error initializing database:", error);
-        setError("Failed to initialize database. Please refresh the page.");
+        setError("Failed to initialize database.");
       }
     }
     setupDB();
-  }, []);
+  }, [storedGameCount]); // Avoid unnecessary re-renders
+  
 
   // Handle adding a new account input field
   const addChessAccount = () => {
@@ -146,8 +147,9 @@ function App() {
       
       // If there were errors but we still got some games, show partial error
       if (errors.length > 0) {
-        setError(`Some accounts couldn't be fetched: ${errors.join('; ')}`);
-      }
+        const errorMessage = errors.slice(0, 2).join('; ') + (errors.length > 2 ? '...' : '');
+        setError(`Some accounts failed: ${errorMessage}`);
+      }      
     } catch (error) {
       setError(`Failed to fetch games: ${error.message}`);
     } finally {
@@ -175,6 +177,7 @@ function App() {
 
   return (
     <div className="container py-4">
+      
       <header className="pb-3 mb-4 border-bottom">
         <h1 className="fw-bold">Chess Game Analyzer</h1>
         {isDbInitialized && (
@@ -189,10 +192,10 @@ function App() {
         <nav className="mt-2">
           <ul className="nav nav-tabs">
             <li className="nav-item">
-              <Link className="nav-link" to="/">Game Manager</Link>
+              <NavLink className="nav-link" to="/">Game Manager</NavLink>
             </li>
             <li className="nav-item">
-              <Link className="nav-link" to="/tree">Variation Tree</Link>
+              <NavLink className="nav-link" to="/tree">Variation Tree</NavLink>
             </li>
           </ul>
         </nav>
@@ -201,7 +204,7 @@ function App() {
       <main>
         <Routes>
           <Route path="/" element={
-            <>
+            <> 
               <AccountManager 
                 chessAccounts={chessAccounts}
                 lichessAccounts={lichessAccounts}
@@ -239,7 +242,7 @@ function App() {
           } />
           
           <Route path="/tree" element={<ChessVariationTree />} />
-        </Routes>
+        </Routes> 
       </main>
     </div>
   );

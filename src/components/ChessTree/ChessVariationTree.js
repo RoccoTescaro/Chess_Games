@@ -6,7 +6,7 @@ import TreeControls from './TreeControls';
 import ChessboardDisplay from './ChessboardDisplay';
 import MovesPanel from './MovesPanel';
 import RelatedGames from './RelatedGames';
-import { buildVariationTree } from './treeUtils';
+import { buildVariationTree } from '../../services/utils/treeUtils';
 
 const ChessVariationTree = () => {
   const [games, setGames] = useState([]);
