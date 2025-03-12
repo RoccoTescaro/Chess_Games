@@ -6,8 +6,8 @@ const GameList = ({ games }) => {
 
   return (
     <div className="card">
-      <div className="card-header bg-light d-flex justify-content-between align-items-center">
-        <h5 className="mb-0">Found {games.length} games</h5>
+      <div className="card-header d-flex justify-content-between align-items-center">
+        <h5 className="mb-0">Total current loaded games: {games.length} </h5>
         <button className="btn btn-sm btn-success" onClick={() => downloadPGN(games)}>
           Download as PGN
         </button>

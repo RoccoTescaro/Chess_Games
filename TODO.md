@@ -18,4 +18,4 @@ add notes to tree like structure
 
 BUGs
 loading bar mostra 100% ma ha ancora del lavoro in background da svolgere
-
+risolvere il caso in cui l'account lichess e chess.com hanno lo stesso username

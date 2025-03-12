@@ -34,14 +34,14 @@ const TreeControls = ({
     setTempMinGames(minGames);
   }, [maxDepth, minGames]);
   
-  const progressPercentage = totalGames ? Math.round((processedGames / totalGames) * 100) : 0;
+  //const progressPercentage = totalGames ? Math.round((processedGames / totalGames) * 100) : 0;
   
   return (
     <div className="mb-3">
       <div className="d-flex justify-content-between align-items-center">
-        <div className={buildingInProgress ? "text-muted" : "d-none"}>
+        {/*<div className={buildingInProgress ? "text-muted" : "d-none"}>
           Building tree: {processedGames} of {totalGames} games ({progressPercentage}%)
-        </div>
+        </div>*/}
         <div className="input-group input-group-sm" style={{ maxWidth: "500px" }}>
           <span className="input-group-text">Max Depth</span>
           <input 
@@ -86,7 +86,7 @@ const TreeControls = ({
         </div>
       </div>
       
-      {buildingInProgress && (
+      {/*{buildingInProgress && (
         <div className="progress mt-2">
           <div 
             className="progress-bar" 
@@ -99,7 +99,8 @@ const TreeControls = ({
             {progressPercentage}%
           </div>
         </div>
-      )}
+      )}*/}
+
     </div>
   );
 };

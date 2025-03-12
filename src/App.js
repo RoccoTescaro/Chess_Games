@@ -6,6 +6,7 @@ import './styles/bootstrap/bootstrap.min.css';
 // Components
 import AccountManager from './components/AccountManager/AccountManager';
 import GameList from './components/GameList/GameList';
+import AccountList from './components/GameList/AccountList';
 import ProgressBar from './components/GeneralUI/ProgressBar';
 import ThemeSwitcher from './components/GeneralUI/ThemeSwitcher';
 import ChessVariationTree from './components/ChessTree/ChessVariationTree';
@@ -27,7 +28,7 @@ function App() {
   const [gamesPerAccount, setGamesPerAccount] = useState(250);
   const [storedGameCount, setStoredGameCount] = useState(0);
   const [analysisDepth, setAnalysisDepth] = useState(20);
-  const [isDbInitialized, setIsDbInitialized] = useState(false);
+  //const [isDbInitialized, setIsDbInitialized] = useState(false);
   const [showLoadingBar, setShowLoadingBar] = useState(false);
 
   // Initialize database on component mount
@@ -39,7 +40,8 @@ function App() {
         if (storedGames.length !== storedGameCount) {
           setStoredGameCount(storedGames.length);
         }
-        setIsDbInitialized(true);
+        //setIsDbInitialized(true);
+        setGames(storedGames);
       } catch (error) {
         setError("Failed to initialize database.");
       }
@@ -181,14 +183,6 @@ function App() {
       
       <header className="pb-3 mb-4 border-bottom">
         <div className="d-flex justify-content-between"> <h1 className="fw-bold">Chess Game Analyzer </h1> <ThemeSwitcher /> </div>
-        {isDbInitialized && (
-          <div className="text-muted small">
-            {storedGameCount > 0 ? 
-              `Database contains ${storedGameCount} games` : 
-              'Database initialized (no games stored)'}
-          </div>
-        )}
-
         {/* Add navigation */}
         <nav className="mt-2">
           <ul className="nav nav-tabs">
@@ -206,37 +200,56 @@ function App() {
         <Routes>
           <Route path="/" element={
             <> 
-              <AccountManager 
-                chessAccounts={chessAccounts}
-                lichessAccounts={lichessAccounts}
-                updateChessAccount={updateChessAccount}
-                updateLichessAccount={updateLichessAccount}
-                removeChessAccount={removeChessAccount}
-                removeLichessAccount={removeLichessAccount}
-                addChessAccount={addChessAccount}
-                addLichessAccount={addLichessAccount}
-                gamesPerAccount={gamesPerAccount}
-                setGamesPerAccount={setGamesPerAccount}
-                analysisDepth={analysisDepth}
-                setAnalysisDepth={setAnalysisDepth}
-                handleFetchGames={handleFetchGames}
-                handleClearDatabase={handleClearDatabase}
-                loading={loading}
-                storedGameCount={storedGameCount}
-              />
-              
-              {/* Error message */}
-              {error && (
-                <div className="alert alert-danger" role="alert">
-                  {error}
+              <div className="d-flex">
+                <div className='card flex-grow-1 me-2 mb-4'>
+                  <h5 className="card-header">Current Accounts</h5>
+                  {
+                    storedGameCount <= 0 ?
+                    (
+                      <div className="card-body text-muted small">
+                        Database initialized but no games stored yet.                        
+                      </div>
+                    )
+                    :
+                    (
+                      <AccountList games={games} />
+                    )
+                  }
                 </div>
-              )}
-              
-              <ProgressBar 
-                progress={progress}
-                loading={loading}
-                showLoadingBar={showLoadingBar}
-              />
+                <div className="flex-grow-0">
+                  <AccountManager 
+                    chessAccounts={chessAccounts}
+                    lichessAccounts={lichessAccounts}
+                    updateChessAccount={updateChessAccount}
+                    updateLichessAccount={updateLichessAccount}
+                    removeChessAccount={removeChessAccount}
+                    removeLichessAccount={removeLichessAccount}
+                    addChessAccount={addChessAccount}
+                    addLichessAccount={addLichessAccount}
+                    gamesPerAccount={gamesPerAccount}
+                    setGamesPerAccount={setGamesPerAccount}
+                    analysisDepth={analysisDepth}
+                    setAnalysisDepth={setAnalysisDepth}
+                    handleFetchGames={handleFetchGames}
+                    handleClearDatabase={handleClearDatabase}
+                    loading={loading}
+                    storedGameCount={storedGameCount}
+                    />
+                  
+                  {/* Error message */}
+                  {error && (
+                    <div className="alert alert-danger" role="alert">
+                      {error}
+                    </div>
+                  )}
+                  
+                  <ProgressBar 
+                    progress={progress}
+                    loading={loading}
+                    showLoadingBar={showLoadingBar}
+                    />
+                  </div>
+              </div>
               
               <GameList games={games} />
             </>
