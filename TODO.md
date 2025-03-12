@@ -16,6 +16,9 @@ add filters to games (data, elo, account)
 add a training mode where the user has to play against his weakspots (how to handle them, how to memorize if the player passed the threshold of accuracy)
 add notes to tree like structure
 
+should inspect game fetching algorithm, it seems to be slow (same for tree creation)
+still variation tree serialization does not seems to work
+
 BUGs
 loading bar mostra 100% ma ha ancora del lavoro in background da svolgere
 risolvere il caso in cui l'account lichess e chess.com hanno lo stesso username

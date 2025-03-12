@@ -122,14 +122,47 @@ export function pruneTreeNodes(node, minGames) {
   });
 }
 
-// Function to serialize tree for storage (can be used with IndexedDB)
-export function serializeTree(tree) {
-  return JSON.stringify(tree);
+// Enhanced function to serialize tree with metadata
+export function serializeTree(tree, metadata = {}) {
+  const dataToSerialize = {
+    tree,
+    metadata: {
+      ...metadata,
+      timestamp: Date.now(),
+      version: '1.0'
+    }
+  };
+  return JSON.stringify(dataToSerialize);
 }
 
-// Function to deserialize tree from storage
-export function deserializeTree(serializedTree) {
-  return JSON.parse(serializedTree);
+// Enhanced function to deserialize tree with metadata
+export function deserializeTree(serializedData) {
+  if (!serializedData) return null;
+  
+  try {
+    const parsed = JSON.parse(serializedData);
+    
+    // Check if this is the new format with metadata
+    if (parsed.tree && parsed.metadata) {
+      return {
+        tree: parsed.tree,
+        metadata: parsed.metadata
+      };
+    }
+    
+    // Handle legacy format (direct tree)
+    return { 
+      tree: parsed, 
+      metadata: { 
+        timestamp: Date.now(), 
+        version: '0.9',
+        isLegacyFormat: true 
+      } 
+    };
+  } catch (error) {
+    console.error('Error deserializing tree:', error);
+    return null;
+  }
 }
 
 // Function to merge two trees (for incremental updates)
@@ -162,4 +195,28 @@ export function mergeTrees(baseTree, newTree) {
   });
   
   return result;
+}
+
+// New function to check if tree should be rebuilt based on metadata
+export function shouldRebuildTree(metadata, currentGames, currentMaxDepth, currentMinGames) {
+  if (!metadata) return true;
+  
+  // Tree should be rebuilt if:
+  // 1. Game count has changed significantly
+  // 2. Parameters have changed
+  // 3. It's an old version with incomplete metadata
+  
+  const gameCountDiff = Math.abs((metadata.gameCount || 0) - currentGames.length);
+  const gameCountChanged = gameCountDiff > 0; // Any change in game count triggers rebuild
+  
+  const paramsChanged = 
+    metadata.maxDepth !== currentMaxDepth || 
+    metadata.minGames !== currentMinGames;
+  
+  const isIncompleteMetadata = 
+    !metadata.hasOwnProperty('gameCount') || 
+    !metadata.hasOwnProperty('maxDepth') || 
+    !metadata.hasOwnProperty('minGames');
+    
+  return gameCountChanged || paramsChanged || isIncompleteMetadata;
 }

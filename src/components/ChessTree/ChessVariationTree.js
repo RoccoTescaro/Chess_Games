@@ -6,6 +6,13 @@ import TreeControls from './TreeControls';
 import ChessboardDisplay from './ChessboardDisplay';
 import MovesPanel from './MovesPanel';
 import RelatedGames from './RelatedGames';
+import { 
+  serializeTree, 
+  deserializeTree, 
+  shouldRebuildTree 
+} from '../../services/utils/treeUtils';
+
+const TREE_STORAGE_KEY = 'chessVariationTree';
 
 const ChessVariationTree = () => {
   const [games, setGames] = useState([]);
@@ -20,39 +27,89 @@ const ChessVariationTree = () => {
   const [maxDepth, setMaxDepth] = useState(10);
   const [minGames, setMinGames] = useState(2);
   const [processedGames, setProcessedGames] = useState(0);
+  const [treeMetadata, setTreeMetadata] = useState(null);
   const workerRef = useRef(null);
 
-  // Load games on component mount
+  // Load games and tree on component mount
   useEffect(() => {
-    async function loadGames() {
+    async function loadGamesAndTree() {
       try {
         setLoading(true);
+        
         // Get games from the database
         const loadedGames = await getGames();
         setGames(loadedGames);
         
-        // Initial tree build
-        if (loadedGames.length > 0) {
+        // Try to load serialized tree from storage
+        const savedData = localStorage.getItem(TREE_STORAGE_KEY);
+        
+        if (savedData) {
+          try {
+            console.log('Found saved tree, attempting to load it');
+            const result = deserializeTree(savedData);
+            
+            if (result && result.tree) {
+              // Check if we need to rebuild based on game count or parameters
+              const rebuild = shouldRebuildTree(
+                result.metadata, 
+                loadedGames, 
+                maxDepth, 
+                minGames
+              );
+              
+              if (rebuild) {
+                console.log('Saved tree needs rebuilding due to changes in games or parameters');
+                if (loadedGames.length > 0) {
+                  buildInitialTree(loadedGames);
+                }
+              } else {
+                // Tree is still valid, use it
+                console.log('Using saved tree from storage');
+                setTreeData(result.tree);
+                setTreeMetadata(result.metadata);
+                setSelectedNode(result.tree);
+                setCurrentPosition(result.tree.fen);
+                setPath([{ name: 'Initial Position', node: result.tree }]);
+              }
+            } else {
+              // Invalid tree data
+              console.warn('Invalid tree data in storage');
+              if (loadedGames.length > 0) {
+                buildInitialTree(loadedGames);
+              }
+            }
+          } catch (error) {
+            console.error('Error loading saved tree:', error);
+            // Fallback to building a new tree if loading fails
+            if (loadedGames.length > 0) {
+              buildInitialTree(loadedGames);
+            }
+          }
+        } else if (loadedGames.length > 0) {
+          // No saved tree, build a new one
+          console.log('No saved tree found, building new tree');
           buildInitialTree(loadedGames);
         }
       } catch (error) {
-        console.error('Error loading games:', error);
+        console.error('Error loading games or tree:', error);
       } finally {
         setLoading(false);
       }
     }
     
-    loadGames();
+    loadGamesAndTree();
     
     // Clean up worker on unmount
-    const currentWorker = workerRef.current;
     return () => {
-      if (currentWorker) {
-        currentWorker.terminate();
+      if (workerRef.current) 
+      {
+        // eslint-disable-next-line
+        workerRef.current.terminate();
       }
     };
-    // eslint-disable-next-line 
-  }, []);
+
+    // eslint-disable-next-line
+  }, []); // Empty dependency array ensures this runs once on mount
   
   // Function to build the initial tree
   const buildInitialTree = (loadedGames) => {
@@ -74,14 +131,6 @@ const ChessVariationTree = () => {
     startTreeBuilding(loadedGames, initialTree, maxDepth, minGames);
   };
   
-  /*// Handle node selection in the tree
-  function handleNodeSelect(node, nodePath) {
-    setSelectedNode(node);
-    setCurrentPosition(node.fen);
-    setRelatedGames(node.games || []);
-    setPath(nodePath);
-  }*/
-  
   // Handle tree control parameter changes
   function handleControlsChange(newMaxDepth, newMinGames) {
     // Do nothing here - we'll apply changes when the Apply button is clicked
@@ -99,6 +148,17 @@ const ChessVariationTree = () => {
         const prunedTree = pruneTree(JSON.parse(JSON.stringify(treeData)), newMinGames);
         setTreeData(prunedTree);
         
+        // Update metadata
+        const updatedMetadata = {
+          ...treeMetadata,
+          minGames: newMinGames,
+          timestamp: Date.now()
+        };
+        setTreeMetadata(updatedMetadata);
+        
+        // Save the updated tree
+        saveTreeToStorage(prunedTree, updatedMetadata);
+        
         // If current selection would be pruned, go back to root
         if (!isNodeInTree(selectedNode, prunedTree)) {
           setSelectedNode(prunedTree);
@@ -111,6 +171,27 @@ const ChessVariationTree = () => {
       else {
         handleRebuild();
       }
+    }
+  }
+  
+  // Helper function to save tree to storage
+  function saveTreeToStorage(tree, metadata = {}) {
+    const completeMetadata = {
+      ...metadata,
+      gameCount: games.length,
+      maxDepth: maxDepth,
+      minGames: minGames,
+      timestamp: Date.now()
+    };
+    
+    try {
+      const serializedData = serializeTree(tree, completeMetadata);
+      localStorage.setItem(TREE_STORAGE_KEY, serializedData);
+      console.log('Tree saved to storage with metadata:', completeMetadata);
+      return true;
+    } catch (error) {
+      console.error('Error saving tree to storage:', error);
+      return false;
     }
   }
   
@@ -130,7 +211,6 @@ const ChessVariationTree = () => {
   }
   
   // Start building the tree in the background with chunked processing
- // Optimize the startTreeBuilding function to reduce deep copies
   function startTreeBuilding(gamesToProcess, initialTree, depth, minGameCount) {
     setBuildingInProgress(true);
     setProcessedGames(0);
@@ -177,6 +257,16 @@ const ChessVariationTree = () => {
         const prunedTree = pruneTree({...processedTreeCopy}, minGameCount);
         setTreeData(prunedTree);
         setWorkingTreeData(null);
+        
+        // Create metadata and save tree
+        const newMetadata = {
+          gameCount: gamesToProcess.length,
+          maxDepth: depth,
+          minGames: minGameCount,
+          timestamp: Date.now()
+        };
+        setTreeMetadata(newMetadata);
+        saveTreeToStorage(prunedTree, newMetadata);
         
         // Find and select the equivalent node in the pruned tree
         if (selectedNode) {
@@ -252,7 +342,6 @@ const ChessVariationTree = () => {
   
   // Handle move selection
   function handleMoveSelect(moveKey) {
-    //const currentTree = treeData || workingTreeData;
     if (selectedNode && selectedNode.children[moveKey]) {
       const newNode = selectedNode.children[moveKey];
       const newPath = [...path, { name: newNode.move, node: newNode }];
@@ -291,11 +380,29 @@ const ChessVariationTree = () => {
     return treeData || workingTreeData;
   }, [treeData, workingTreeData]);
   
+  // Add tree stats to display
+  const treeStats = useMemo(() => {
+    if (!treeMetadata) return null;
+    
+    return {
+      lastBuilt: new Date(treeMetadata.timestamp).toLocaleString(),
+      gameCount: treeMetadata.gameCount || 'Unknown',
+      maxDepth: treeMetadata.maxDepth || maxDepth,
+      minGames: treeMetadata.minGames || minGames
+    };
+  }, [treeMetadata, maxDepth, minGames]);
+  
   return (
     <div className="chess-variation-tree">
       <div className="card mb-4">
         <div className="card-header">
           <h5 className="mb-0">Chess Variation Tree Explorer</h5>
+          {treeStats && (
+            <div className="text-muted small mt-1">
+              Last built: {treeStats.lastBuilt} | Games: {treeStats.gameCount} | 
+              Max depth: {treeStats.maxDepth} | Min games: {treeStats.minGames}
+            </div>
+          )}
         </div>
         <div className="card-body">
           {loading ? (
@@ -352,6 +459,7 @@ const ChessVariationTree = () => {
   );
 };
 
+// The rest of your functions remain unchanged
 function incrementalBuildTree(existingTree, gamesChunk, maxDepth) {
   // Create a shallow copy of the tree to avoid mutating the original
   const tree = {...existingTree};
