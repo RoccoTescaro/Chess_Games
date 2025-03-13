@@ -1,74 +1,27 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Chessboard } from 'react-chessboard';
 import * as d3 from 'd3';
+import { deserializeTree } from '../../services/utils/treeUtils';
 
 const Flowchart = () => {
   const containerRef = useRef(null);
+  const svgRef = useRef(null);
   const [boardSize, setBoardSize] = useState(120);
   const [expandedNodes, setExpandedNodes] = useState(new Set(['initial']));
-  const [nodesData, setNodesData] = useState([]);
-  const [linksData, setLinksData] = useState([]);
+  const [viewportRect, setViewportRect] = useState({ x: 0, y: 0, width: 1000, height: 800 });
+  const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 });
 
-  // Sample data structure
-  const treeData = {
-    id: "initial",
-    fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-    move: "Initial position",
-    frequency: 1,
-    children: [
-      {
-        id: "e4",
-        fen: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
-        move: "e4",
-        frequency: 0.85,
-        children: [
-          {
-            id: "e4-e5",
-            fen: "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
-            move: "e5",
-            frequency: 0.6,
-            children: []
-          },
-          {
-            id: "e4-c6",
-            fen: "rnbqkbnr/pp1ppppp/2p5/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
-            move: "c6",
-            frequency: 0.3,
-            children: []
-          }
-        ]
-      },
-      {
-        id: "d4",
-        fen: "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1",
-        move: "d4",
-        frequency: 0.75,
-        children: [
-          {
-            id: "d4-e5",
-            fen: "rnbqkbnr/pppp1ppp/8/4p3/3P4/8/PPP1PPPP/RNBQKBNR w KQkq e6 0 2",
-            move: "e5",
-            frequency: 0.2,
-            children: []
-          },
-          {
-            id: "d4-d5",
-            fen: "rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq d6 0 2",
-            move: "d5",
-            frequency: 0.5,
-            children: []
-          }
-        ]
-      }
-    ]
-  };
+  // Load tree data from localStorage (only once)
+  const treeData = useMemo(() => {
+    return deserializeTree(localStorage.getItem('chessVariationTree')).tree;
+  }, []);
 
   // Process the tree data for d3
   const processTreeData = useCallback((root, expandedSet) => {
     const result = { ...root };
     
     if (root.children && expandedSet.has(root.id)) {
-      result.children = root.children.map(child => processTreeData(child, expandedSet));
+      result.children = Object.values(root.children).map(child => processTreeData(child, expandedSet));
     } else {
       result.children = [];
     }
@@ -76,8 +29,15 @@ const Flowchart = () => {
     return result;
   }, []);
 
+  // Calculate background color based on frequency
+  const getBgColor = useCallback((frequency) => {
+    if (frequency > 0.8) return "#dc3545"; // bg-danger
+    if (frequency > 0.6) return "#ffc107"; // bg-warning
+    return "transparent";
+  }, []);
+
   // Toggle node expansion
-  const toggleNode = (id) => {
+  const toggleNode = useCallback((id) => {
     setExpandedNodes(prev => {
       const newSet = new Set(prev);
       if (newSet.has(id)) {
@@ -87,18 +47,11 @@ const Flowchart = () => {
       }
       return newSet;
     });
-  };
+  }, []);
 
-  // Calculate background color based on frequency
-  const getBgColor = (frequency) => {
-    if (frequency > 0.8) return "#dc3545"; // bg-danger
-    if (frequency > 0.6) return "#ffc107"; // bg-warning
-    return "transparent";
-  };
-
-  // Update tree layout
-  useEffect(() => {
-    if (!containerRef.current) return;
+  // Compute tree layout and visible nodes
+  const { visibleNodes, visibleLinks } = useMemo(() => {
+    if (!containerRef.current) return { visibleNodes: [], visibleLinks: [] };
     
     // Process tree data based on expanded nodes
     const processedData = processTreeData(treeData, expandedNodes);
@@ -112,46 +65,98 @@ const Flowchart = () => {
     const root = d3.hierarchy(processedData);
     treeLayout(root);
     
-    // Extract nodes and links data
-    const nodes = root.descendants().map(d => ({
+    // Extract all nodes and links
+    const allNodes = root.descendants().map(d => ({
       id: d.data.id,
       x: d.x,
       y: d.y,
       fen: d.data.fen,
       move: d.data.move,
-      frequency: d.data.frequency
+      frequency: d.data.frequency,
+      hasChildren: d.data.children && Object.keys(d.data.children).length > 0
     }));
     
-    const links = root.links().map(d => ({
-      source: { x: d.source.x, y: d.source.y },
-      target: { x: d.target.x, y: d.target.y }
+    const allLinks = root.links().map(d => ({
+      source: { x: d.source.x, y: d.source.y, id: d.source.data.id },
+      target: { x: d.target.x, y: d.target.y, id: d.target.data.id }
     }));
     
-    setNodesData(nodes);
-    setLinksData(links);
-  }, [boardSize, expandedNodes, processTreeData]);
+    // Filter nodes and links based on viewport
+    const margin = boardSize * 2; // Extra margin to preload nodes just outside viewport
+    const visibleArea = {
+      left: (viewportRect.x - transform.x) / transform.k - margin,
+      right: (viewportRect.x + viewportRect.width - transform.x) / transform.k + margin,
+      top: (viewportRect.y - transform.y) / transform.k - margin,
+      bottom: (viewportRect.y + viewportRect.height - transform.y) / transform.k + margin
+    };
+    
+    // Filter nodes within visible area
+    const visibleNodes = allNodes.filter(node => 
+      node.x + boardSize/2 >= visibleArea.left &&
+      node.x - boardSize/2 <= visibleArea.right &&
+      node.y + boardSize/2 >= visibleArea.top &&
+      node.y - boardSize/2 <= visibleArea.bottom
+    );
+    
+    // Get visible node IDs for quick lookup
+    const visibleNodeIds = new Set(visibleNodes.map(node => node.id));
+    
+    // Filter links that connect visible nodes
+    const visibleLinks = allLinks.filter(link => 
+      visibleNodeIds.has(link.source.id) && visibleNodeIds.has(link.target.id)
+    );
+    
+    return { visibleNodes, visibleLinks };
+  }, [boardSize, expandedNodes, processTreeData, treeData, viewportRect, transform]);
 
   // Handle zoom controls
-  const handleZoomIn = () => {
+  const handleZoomIn = useCallback(() => {
     setBoardSize(prev => Math.min(prev + 20, 200));
-  };
+  }, []);
 
-  const handleZoomOut = () => {
+  const handleZoomOut = useCallback(() => {
     setBoardSize(prev => Math.max(prev - 20, 60));
-  };
+  }, []);
+
+  // Update viewport rect when svg size changes
+  useEffect(() => {
+    const updateViewportSize = () => {
+      if (svgRef.current) {
+        const bbox = svgRef.current.getBoundingClientRect();
+        setViewportRect({
+          x: 0,
+          y: 0,
+          width: bbox.width,
+          height: bbox.height
+        });
+      }
+    };
+    
+    updateViewportSize();
+    window.addEventListener('resize', updateViewportSize);
+    
+    return () => {
+      window.removeEventListener('resize', updateViewportSize);
+    };
+  }, []);
 
   // D3 zoom behavior setup
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!svgRef.current) return;
     
-    const svg = d3.select(containerRef.current).select("svg");
+    const svg = d3.select(svgRef.current);
     const g = svg.select("g.zoom-container");
     
     // Add zoom behavior
     const zoom = d3.zoom()
-      .scaleExtent([0.5, 2])
+      .scaleExtent([0.2, 2])
       .on("zoom", (event) => {
         g.attr("transform", event.transform);
+        setTransform({
+          x: event.transform.x,
+          y: event.transform.y,
+          k: event.transform.k
+        });
       });
     
     svg.call(zoom);
@@ -167,21 +172,139 @@ const Flowchart = () => {
     };
   }, []);
 
+  // Memoized Node component to prevent unnecessary re-renders
+  const Node = useCallback(({ node }) => {
+    return (
+      <g transform={`translate(${node.x},${node.y})`}>
+        {/* Background/border */}
+        <rect
+          x={-boardSize / 2}
+          y={-boardSize / 2}
+          width={boardSize}
+          height={boardSize}
+          rx="4"
+          fill={getBgColor(node.frequency)}
+          stroke="#ccc"
+          strokeWidth="1"
+          style={{ cursor: 'pointer' }}
+          onClick={() => toggleNode(node.id)}
+        />
+        
+        {/* Position for chessboard */}
+        <foreignObject
+          x={-boardSize / 2 + 3}
+          y={-boardSize / 2 + 3}
+          width={boardSize - 6}
+          height={boardSize - 6}
+        >
+          <div style={{ width: '100%', height: '100%' }}>
+            <Chessboard
+              position={node.fen}
+              boardWidth={boardSize - 6}
+              arePiecesDraggable={false}
+            />
+          </div>
+        </foreignObject>
+        
+        {/* Show expansion indicator */}
+        {node.hasChildren && (
+          <circle
+            cx={boardSize / 2 - 10}
+            cy={-boardSize / 2 + 10}
+            r={5}
+            fill={expandedNodes.has(node.id) ? "#28a745" : "#dc3545"}
+          />
+        )}
+        
+        {/* Move text - only show for boards large enough */}
+        {boardSize > 100 && (
+          <>
+            <text
+              y={boardSize / 2 + 15}
+              textAnchor="middle"
+              fontSize="12px"
+              fontWeight="bold"
+            >
+              {node.move}
+            </text>
+            {boardSize > 140 && (
+              <text
+                y={boardSize / 2 + 30}
+                textAnchor="middle"
+                fontSize="10px"
+                fill="#6c757d"
+              >
+                Freq: {(node.frequency * 100).toFixed(1)}%
+              </text>
+            )}
+          </>
+        )}
+      </g>
+    );
+  }, [boardSize, expandedNodes, getBgColor, toggleNode]);
+
+  // Render minimap for navigation
+  const Minimap = useMemo(() => {
+    // Create a simplified representation of the tree
+    const minimapScale = 0.05;
+    const minimapWidth = 150;
+    const minimapHeight = 100;
+    
+    return (
+      <div className="absolute top-4 right-4 bg-white border rounded shadow-sm overflow-hidden">
+        <svg width={minimapWidth} height={minimapHeight} className="bg-gray-100">
+          {/* Show all nodes as small dots */}
+          <g transform={`scale(${minimapScale})`}>
+            {visibleLinks.map((link, i) => (
+              <path
+                key={`minimap-link-${i}`}
+                d={`M${link.source.x},${link.source.y} L${link.target.x},${link.target.y}`}
+                stroke="#aaa"
+                strokeWidth="15"
+              />
+            ))}
+            {visibleNodes.map(node => (
+              <circle
+                key={`minimap-node-${node.id}`}
+                cx={node.x}
+                cy={node.y}
+                r={50}
+                fill={getBgColor(node.frequency) || "#333"}
+              />
+            ))}
+          </g>
+          
+          {/* Viewport indicator */}
+          <rect
+            x={0}
+            y={0}
+            width={minimapWidth}
+            height={minimapHeight}
+            fill="rgba(66, 153, 225, 0.2)"
+            stroke="rgba(66, 153, 225, 0.6)"
+            strokeWidth="1"
+          />
+        </svg>
+      </div>
+    );
+  }, [visibleNodes, visibleLinks, getBgColor]);
+
   return (
     <div className="w-full h-full relative" ref={containerRef}>
       <svg 
+        ref={svgRef}
         width="100%" 
         height="100%" 
         className="border rounded inner-shadow" 
         style={{ 
-            cursor: 'grab',
-            maxHeight: '75vh', 
-            minHeight: '75vh'
-         }}
+          cursor: 'grab',
+          maxHeight: '75vh', 
+          minHeight: '75vh'
+        }}
       >
         <g className="zoom-container">
           {/* Links */}
-          {linksData.map((link, i) => (
+          {visibleLinks.map((link, i) => (
             <path
               key={`link-${i}`}
               d={`M${link.source.x},${link.source.y} C${link.source.x},${(link.source.y + link.target.y) / 2} ${link.target.x},${(link.source.y + link.target.y) / 2} ${link.target.x},${link.target.y}`}
@@ -192,62 +315,14 @@ const Flowchart = () => {
           ))}
           
           {/* Nodes */}
-          {nodesData.map(node => (
-            <g key={node.id} transform={`translate(${node.x},${node.y})`}>
-              {/* Background/border */}
-              <rect
-                x={-boardSize / 2}
-                y={-boardSize / 2}
-                width={boardSize}
-                height={boardSize}
-                rx="4"
-                fill={getBgColor(node.frequency)}
-                stroke="#ccc"
-                strokeWidth="1"
-                style={{ cursor: 'pointer' }}
-                onClick={() => toggleNode(node.id)}
-              />
-              
-              {/* Position for chessboard */}
-              <foreignObject
-                x={-boardSize / 2 + 3}
-                y={-boardSize / 2 + 3}
-                width={boardSize - 6}
-                height={boardSize - 6}
-              >
-                <div style={{ width: '100%', height: '100%' }}>
-                  <Chessboard
-                    position={node.fen}
-                    boardWidth={boardSize - 6}
-                  />
-                </div>
-              </foreignObject>
-              
-              {/* Move text */}
-              {boardSize > 140 && (
-                <>
-                  <text
-                    y={boardSize / 2 + 15}
-                    textAnchor="middle"
-                    fontSize="12px"
-                    fontWeight="bold"
-                  >
-                    {node.move}
-                  </text>
-                  <text
-                    y={boardSize / 2 + 30}
-                    textAnchor="middle"
-                    fontSize="10px"
-                    fill="#6c757d"
-                  >
-                    Freq: {(node.frequency * 100).toFixed(1)}%
-                  </text>
-                </>
-              )}
-            </g>
+          {visibleNodes.map(node => (
+            <Node key={node.id} node={node} />
           ))}
         </g>
       </svg>
+      
+      {/* Minimap */}
+      {Minimap}
       
       {/* Zoom controls */}
       <div className="absolute bottom-4 right-4 flex space-x-2">
@@ -263,6 +338,11 @@ const Flowchart = () => {
         >
           +
         </button>
+      </div>
+      
+      {/* Display node count info for debugging */}
+      <div className="absolute bottom-4 left-4 text-xs text-gray-500">
+        Rendering {visibleNodes.length} nodes of total tree
       </div>
     </div>
   );

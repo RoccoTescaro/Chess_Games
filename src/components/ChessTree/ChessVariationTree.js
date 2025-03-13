@@ -29,8 +29,8 @@ const ChessVariationTree = () => {
   const [currentPosition, setCurrentPosition] = useState(new Chess().fen());
   const [relatedGames, setRelatedGames] = useState([]);
   const [path, setPath] = useState([]);
-  const [maxDepth, setMaxDepth] = useState(10);
-  const [minGames, setMinGames] = useState(2);
+  const [maxDepth, setMaxDepth] = useState(20);
+  const [minGames, setMinGames] = useState(15);
   const [processedGames, setProcessedGames] = useState(0);
   const [treeMetadata, setTreeMetadata] = useState(null);
   const workerRef = useRef(null);
