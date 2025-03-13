@@ -18,6 +18,7 @@ add notes to tree like structure
 
 should inspect game fetching algorithm, it seems to be slow (same for tree creation)
 still variation tree serialization does not seems to work
+clearing the database does not clear the tree
 
 BUGs
 loading bar mostra 100% ma ha ancora del lavoro in background da svolgere

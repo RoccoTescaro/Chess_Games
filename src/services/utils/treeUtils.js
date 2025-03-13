@@ -209,9 +209,11 @@ export function shouldRebuildTree(metadata, currentGames, currentMaxDepth, curre
   const gameCountDiff = Math.abs((metadata.gameCount || 0) - currentGames.length);
   const gameCountChanged = gameCountDiff > 0; // Any change in game count triggers rebuild
   
+
+  //should handle pruning if params Changed worstly
   const paramsChanged = 
-    metadata.maxDepth !== currentMaxDepth || 
-    metadata.minGames !== currentMinGames;
+    metadata.maxDepth < currentMaxDepth || 
+    metadata.minGames > currentMinGames;
   
   const isIncompleteMetadata = 
     !metadata.hasOwnProperty('gameCount') || 

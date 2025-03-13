@@ -12,6 +12,7 @@ import ThemeSwitcher from './components/GeneralUI/ThemeSwitcher';
 import ChessVariationTree from './components/ChessTree/ChessVariationTree';
 
 // Services
+import { clearTreeStorage } from './components/ChessTree/ChessVariationTree';
 import { fetchChessComGames } from './services/api/chessComApi';
 import { fetchLichessGames } from './services/api/lichessApi';
 import { extractGameInfo } from './services/utils/pgn';
@@ -169,6 +170,7 @@ function App() {
     if (window.confirm("Are you sure you want to clear the database? This will delete all stored games.")) {
       try {
         await clearGames();
+        clearTreeStorage();
         setStoredGameCount(0);
         setGames([]);
         alert("Database cleared successfully");

@@ -14,6 +14,11 @@ import {
 
 const TREE_STORAGE_KEY = 'chessVariationTree';
 
+export function clearTreeStorage()
+{
+  localStorage.setItem(TREE_STORAGE_KEY,{})
+}
+
 const ChessVariationTree = () => {
   const [games, setGames] = useState([]);
   const [treeData, setTreeData] = useState(null);
@@ -34,8 +39,6 @@ const ChessVariationTree = () => {
   useEffect(() => {
     async function loadGamesAndTree() {
       try {
-        setLoading(true);
-        
         // Get games from the database
         const loadedGames = await getGames();
         setGames(loadedGames);
@@ -113,6 +116,9 @@ const ChessVariationTree = () => {
   
   // Function to build the initial tree
   const buildInitialTree = (loadedGames) => {
+    //should probably move back in useEffect
+    setLoading(true);
+    
     // Create a placeholder tree with the root node
     const initialTree = {
       fen: new Chess().fen(),
