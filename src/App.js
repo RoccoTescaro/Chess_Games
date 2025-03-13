@@ -10,6 +10,7 @@ import AccountList from './components/GameList/AccountList';
 import ProgressBar from './components/GeneralUI/ProgressBar';
 import ThemeSwitcher from './components/GeneralUI/ThemeSwitcher';
 import ChessVariationTree from './components/ChessTree/ChessVariationTree';
+import Flowchart from './components/ChessTree/Flowchart';
 
 // Services
 import { clearTreeStorage } from './components/ChessTree/ChessVariationTree';
@@ -194,6 +195,9 @@ function App() {
             <li className="nav-item">
               <NavLink className="nav-link" to="/tree">Variation Tree</NavLink>
             </li>
+            <li className="nav-item">
+              <NavLink className="nav-link" to="/flowchart">Flowchart</NavLink>
+            </li>
           </ul>
         </nav>
       </header>
@@ -258,6 +262,7 @@ function App() {
           } />
           
           <Route path="/tree" element={<ChessVariationTree />} />
+          <Route path="/flowchart" element={<Flowchart />} />
         </Routes> 
       </main>
     </div>
